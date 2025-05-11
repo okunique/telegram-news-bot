@@ -13,9 +13,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def main():
+async def main():
     # Инициализация базы данных
-    asyncio.run(init_db())
+    await init_db()
 
     # Создание приложения
     application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
@@ -30,7 +30,7 @@ def main():
     setup_handlers(application, partial(session_factory))
 
     logger.info("Бот запущен")
-    application.run_polling()
+    await application.run_polling()
 
 if __name__ == '__main__':
-    main() 
+    asyncio.run(main()) 
