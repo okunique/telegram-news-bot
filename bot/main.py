@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from telegram.ext import Application
 from telegram import Update
@@ -13,9 +12,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def main():
+def main():
     # Инициализация базы данных
-    await init_db()
+    init_db()
 
     # Создание приложения
     application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
@@ -30,7 +29,7 @@ async def main():
     setup_handlers(application, partial(session_factory))
 
     logger.info("Бот запущен")
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == '__main__':
-    asyncio.run(main()) 
+    main() 
