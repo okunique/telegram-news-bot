@@ -7,6 +7,7 @@ from .openrouter_client import OpenRouterClient
 from .media_handler import MediaHandler
 from .models import News, DigestLog
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from datetime import datetime, timedelta
 
 logger = structlog.get_logger()
@@ -30,8 +31,8 @@ class BotHandlers:
         try:
             # Проверяем соединение с базой данных
             async with self.session.begin():
-                news_count = await self.session.query(News).count()
-                digest_count = await self.session.query(DigestLog).count()
+                news_count = await self.session.scalar(select(func.count()).select_from(News))
+                digest_count = await self.session.scalar(select(func.count()).select_from(DigestLog))
             
             status_text = (
                 "📊 Статус бота:\n\n"
