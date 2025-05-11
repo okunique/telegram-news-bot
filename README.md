@@ -1,28 +1,55 @@
 # Telegram News Analysis Bot
 
-Бот для сбора, анализа и перевода новостей из Telegram-каналов с возможностью генерации рыночных прогнозов.
+Бот для автоматизации работы с новостями в Telegram, включающий классификацию, перевод и прогнозирование рынка.
 
----
+## Возможности
 
-## Полная инструкция по установке и запуску на чистом сервере (Linux/Ubuntu)
+- Автоматический мониторинг новостных каналов
+- Классификация новостей по категориям
+- Перевод новостей на русский язык
+- Анализ влияния на рынок
+- Автоматическая публикация в целевой канал
 
-### 1. Установка системных зависимостей
+## Быстрая установка
+
+Для быстрой установки на чистый сервер выполните:
 
 ```bash
+# Скачайте скрипт установки
+curl -O https://raw.githubusercontent.com/okunique/telegram-news-bot/master/install.sh
+
+# Сделайте скрипт исполняемым
+chmod +x install.sh
+
+# Запустите установку
+sudo ./install.sh
+```
+
+После установки:
+1. Отредактируйте файл `.env` и укажите ваши токены
+2. Проверьте статус сервиса: `systemctl status newsbot`
+3. Посмотрите логи: `journalctl -u newsbot -f`
+
+## Ручная установка
+
+Если вы хотите установить бота вручную, следуйте этим шагам:
+
+### 1. Системные зависимости
+
+```bash
+# Обновление системы
 sudo apt update && sudo apt upgrade -y
+
+# Установка необходимых пакетов
 sudo apt install -y python3 python3-venv python3-pip git postgresql postgresql-contrib libpq-dev
 ```
 
-### 2. Создание пользователя и базы данных PostgreSQL
+### 2. Настройка PostgreSQL
 
 ```bash
-sudo -u postgres psql
-```
-В интерактивной консоли PostgreSQL:
-```sql
-CREATE USER newsbot_user WITH PASSWORD 'your_strong_password';
-CREATE DATABASE newsbot OWNER newsbot_user;
-\q
+# Создание пользователя и базы данных
+sudo -u postgres psql -c "CREATE USER newsbot_user WITH PASSWORD 'your_password';"
+sudo -u postgres psql -c "CREATE DATABASE newsbot OWNER newsbot_user;"
 ```
 
 ### 3. Клонирование репозитория
@@ -32,30 +59,22 @@ git clone https://github.com/okunique/telegram-news-bot.git
 cd telegram-news-bot
 ```
 
-### 4. Создание и активация виртуального окружения Python
+### 4. Настройка Python окружения
 
 ```bash
+# Создание виртуального окружения
 python3 -m venv venv
 source venv/bin/activate
-```
 
-### 5. Установка Python-зависимостей
-
-```bash
+# Установка зависимостей
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 6. Настройка переменных окружения
+### 5. Конфигурация
 
-Создайте файл `.env` в корне проекта:
+Создайте файл `.env` в корневой директории проекта:
 
-```bash
-touch .env
-nano .env
-```
-
-Пример содержимого:
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 OPENROUTER_API_KEY=your_openrouter_api_key
@@ -65,110 +84,73 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DB=newsbot
 POSTGRES_USER=newsbot_user
-POSTGRES_PASSWORD=your_strong_password
+POSTGRES_PASSWORD=your_password
 ```
 
-- `SOURCE_CHANNEL_IDS` — ID исходных каналов через запятую (минус обязателен для публичных/приватных каналов)
-- `TARGET_CHANNEL_ID` — ID вашего личного канала для публикации
-
-### 7. Миграция базы данных (Alembic)
+### 6. Миграция базы данных
 
 ```bash
 alembic upgrade head
 ```
 
-Если alembic не найден, установите его:
-```bash
-pip install alembic
-```
-
-### 8. Запуск бота
+### 7. Запуск бота
 
 ```bash
+# Запуск в режиме разработки
 python -m bot.main
-```
 
----
-
-## Рекомендации по безопасности
-- Никогда не публикуйте свой `.env` и токены в открытом доступе
-- Используйте сложные пароли для PostgreSQL
-- Для production-сервера используйте отдельного пользователя Linux и ограничьте права доступа к файлам
-- Рекомендуется запускать бота через supervisor/systemd для автозапуска и мониторинга
-
----
-
-## Быстрый старт (TL;DR)
-```bash
-sudo apt update && sudo apt install -y python3 python3-venv python3-pip git postgresql libpq-dev
-sudo -u postgres psql -c "CREATE USER newsbot_user WITH PASSWORD 'your_strong_password';"
-sudo -u postgres psql -c "CREATE DATABASE newsbot OWNER newsbot_user;"
-git clone https://github.com/okunique/telegram-news-bot.git
-cd telegram-news-bot
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env # или создайте вручную
-alembic upgrade head
-python -m bot.main
-```
-
----
-
-## Пример systemd unit для автозапуска (опционально)
-
-Создайте файл `/etc/systemd/system/newsbot.service`:
-
-```
-[Unit]
-Description=Telegram News Analysis Bot
-After=network.target postgresql.service
-
-[Service]
-User=your_linux_user
-WorkingDirectory=/path/to/telegram-news-bot
-Environment="PATH=/path/to/telegram-news-bot/venv/bin"
-ExecStart=/path/to/telegram-news-bot/venv/bin/python -m bot.main
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
+# Или через systemd (рекомендуется для продакшена)
+sudo cp newsbot.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable newsbot
 sudo systemctl start newsbot
-sudo systemctl status newsbot
 ```
-
----
-
-## Команды бота
-
-- `/start` — Начало работы с ботом
-- `/status` — Проверка статуса бота и соединения
-- `/digest 1h` — Дайджест за последний час
-- `/digest 24h` — Дайджест за сутки
-
----
 
 ## Структура проекта
 
 ```
-bot/
-  ├── main.py           # Основной файл бота
-  ├── handlers.py       # Обработчики команд
-  ├── models.py         # Модели базы данных
-  ├── config.py         # Конфигурация
-  ├── openrouter_client.py  # Клиент OpenRouter API
-  └── media_handler.py  # Обработчик медиафайлов
-alembic/               # Миграции базы данных
-.env                   # Конфигурация окружения
-requirements.txt       # Зависимости
-README.md              # Документация
+telegram-news-bot/
+├── alembic/              # Миграции базы данных
+├── bot/
+│   ├── __init__.py
+│   ├── main.py          # Точка входа
+│   ├── config.py        # Конфигурация
+│   ├── database.py      # Работа с БД
+│   ├── handlers/        # Обработчики команд
+│   ├── services/        # Бизнес-логика
+│   └── utils/           # Вспомогательные функции
+├── tests/               # Тесты
+├── .env                 # Конфигурация (не в репозитории)
+├── .gitignore
+├── alembic.ini
+├── install.sh          # Скрипт автоматической установки
+├── requirements.txt
+└── README.md
 ```
 
----
+## Требования
+
+- Python 3.8+
+- PostgreSQL 12+
+- Telegram Bot Token
+- OpenRouter API Key
+
+## Безопасность
+
+- Храните токены и пароли в `.env` файле
+- Не публикуйте `.env` файл в репозиторий
+- Используйте отдельного пользователя для базы данных
+- Регулярно обновляйте зависимости
+- Настройте брандмауэр
+- Используйте HTTPS для API запросов
+
+## Поддержка
+
+При возникновении проблем:
+1. Проверьте логи: `journalctl -u newsbot -f`
+2. Убедитесь, что все токены указаны правильно
+3. Проверьте доступность API сервисов
+4. Создайте issue в репозитории
 
 ## Лицензия
 
