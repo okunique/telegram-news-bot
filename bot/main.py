@@ -2,7 +2,7 @@ import asyncio
 import logging
 from telegram.ext import Application
 from bot.config import settings
-from bot.database import init_db
+from bot.database import init_db, async_session
 from bot.handlers import setup_handlers
 
 # Настройка логирования
@@ -20,14 +20,16 @@ async def main():
         # Создание приложения
         application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
         
-        # Настройка обработчиков
-        setup_handlers(application)
-        
-        # Запуск бота
-        logger.info("Бот запущен")
-        await application.initialize()
-        await application.start()
-        await application.run_polling(allowed_updates=Application.ALL_TYPES)
+        # Создание сессии базы данных
+        async with async_session() as session:
+            # Настройка обработчиков
+            setup_handlers(application, session)
+            
+            # Запуск бота
+            logger.info("Бот запущен")
+            await application.initialize()
+            await application.start()
+            await application.run_polling(allowed_updates=Application.ALL_TYPES)
         
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}", exc_info=True)
