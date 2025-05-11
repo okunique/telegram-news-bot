@@ -145,4 +145,16 @@ class BotHandlers:
                 )
             
         except Exception as e:
-            logger.error("Error handling message", error=str(e)) 
+            logger.error("Error handling message", error=str(e))
+
+def setup_handlers(application, session: AsyncSession):
+    """Настраивает обработчики команд и сообщений"""
+    handlers = BotHandlers(session)
+    
+    # Регистрируем обработчики команд
+    application.add_handler(CommandHandler("start", handlers.start))
+    application.add_handler(CommandHandler("status", handlers.status))
+    application.add_handler(CommandHandler("digest", handlers.digest))
+    
+    # Регистрируем обработчик сообщений
+    application.add_handler(MessageHandler(filters.ALL, handlers.handle_message)) 
