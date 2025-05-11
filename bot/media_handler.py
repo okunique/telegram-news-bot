@@ -1,6 +1,7 @@
 import os
 import aiohttp
 import structlog
+from typing import Optional, List
 from aiogram.types import Message
 from .config import settings
 
@@ -11,7 +12,7 @@ class MediaHandler:
         self.media_dir = "media"
         os.makedirs(self.media_dir, exist_ok=True)
     
-    async def handle_media(self, message: Message) -> str:
+    async def handle_media(self, message: Message) -> Optional[str]:
         """Обрабатывает медиафайлы из сообщения"""
         try:
             if message.photo:
@@ -54,12 +55,12 @@ class MediaHandler:
             logger.error("Error downloading media", error=str(e))
             return None
     
-    async def handle_media_group(self, updates: List[Update], context: ContextTypes.DEFAULT_TYPE) -> List[str]:
+    async def handle_media_group(self, messages: List[Message]) -> List[str]:
         """Обрабатывает группу медиафайлов (альбом)"""
         media_urls = []
-        for update in updates:
-            if update.message.media_group_id:
-                url = await self.handle_media(update)
+        for message in messages:
+            if message.media_group_id:
+                url = await self.handle_media(message)
                 if url:
                     media_urls.append(url)
         return media_urls 
