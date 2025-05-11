@@ -2,8 +2,8 @@ import asyncio
 import logging
 from telegram.ext import Application
 from bot.config import settings
-from database import init_db
-from handlers import setup_handlers
+from bot.database import init_db
+from bot.handlers import setup_handlers
 
 # Настройка логирования
 logging.basicConfig(
