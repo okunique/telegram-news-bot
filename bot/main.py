@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from telegram.ext import Application
-from bot.config import Config
+from bot.config import settings
 from database import init_db
 from handlers import setup_handlers
 
@@ -18,7 +18,7 @@ async def main():
         await init_db()
         
         # Создание приложения
-        application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
+        application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
         
         # Настройка обработчиков
         setup_handlers(application)
