@@ -1,5 +1,6 @@
-from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler, MessageHandler, filters
+from aiogram import Router, F
+from aiogram.types import Message
+from aiogram.filters import Command
 import structlog
 from typing import Optional
 from .config import settings
@@ -18,15 +19,15 @@ class BotHandlers:
         self.openrouter = OpenRouterClient()
         self.media_handler = MediaHandler()
     
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def start(self, message: Message):
         """Обработчик команды /start"""
-        await update.message.reply_text(
+        await message.answer(
             "Привет! Я бот для анализа и перевода новостей. "
             "Я буду собирать новости из указанных каналов, "
             "переводить их и создавать аналитические дайджесты."
         )
     
-    async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def status(self, message: Message):
         """Обработчик команды /status"""
         try:
             # Проверяем соединение с базой данных
@@ -42,18 +43,20 @@ class BotHandlers:
                 f"📊 Создано дайджестов: {digest_count}\n"
             )
             
-            await update.message.reply_text(status_text)
+            await message.answer(status_text)
             
         except Exception as e:
             logger.error("Error in status command", error=str(e))
-            await update.message.reply_text("❌ Ошибка при получении статуса")
+            await message.answer("❌ Ошибка при получении статуса")
     
-    async def digest(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def digest(self, message: Message):
         """Обработчик команды /digest"""
         try:
-            period = context.args[0] if context.args else "24h"
+            args = message.text.split()[1:] if message.text else []
+            period = args[0] if args else "24h"
+            
             if period not in settings.DIGEST_PERIODS:
-                await update.message.reply_text(
+                await message.answer(
                     "❌ Неверный период. Используйте: 1h или 24h"
                 )
                 return
@@ -69,37 +72,34 @@ class BotHandlers:
                 news = result.scalars().all()
             
             if not news:
-                await update.message.reply_text(
+                await message.answer(
                     f"📭 Нет новостей за последние {period}"
                 )
                 return
             
             # Генерируем дайджест
             digest_text = await self._generate_digest(news, period)
-            await update.message.reply_text(digest_text)
+            await message.answer(digest_text)
             
         except Exception as e:
             logger.error("Error in digest command", error=str(e))
-            await update.message.reply_text("❌ Ошибка при создании дайджеста")
+            await message.answer("❌ Ошибка при создании дайджеста")
     
     async def _generate_digest(self, news: list, period: str) -> str:
         """Генерирует текст дайджеста"""
         # TODO: Реализовать генерацию дайджеста с помощью OpenRouter API
         return "Заглушка для дайджеста"
     
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def handle_message(self, message: Message):
         """Обработчик входящих сообщений"""
         try:
-            if not update.message:
-                return
-            
             # Проверяем, что сообщение из нужного канала
-            if str(update.message.chat.id) not in settings.SOURCE_CHANNEL_IDS:
+            if str(message.chat.id) not in settings.SOURCE_CHANNEL_IDS:
                 return
             
             # Получаем текст и медиа
-            text = update.message.text or update.message.caption or ""
-            media_url = await self.media_handler.handle_media(update, context)
+            text = message.text or message.caption or ""
+            media_url = await self.media_handler.handle_media(message)
             
             if not text and not media_url:
                 return
@@ -118,8 +118,8 @@ class BotHandlers:
             
             # Сохраняем в базу данных
             news = News(
-                source_channel_id=str(update.message.chat.id),
-                message_id=update.message.message_id,
+                source_channel_id=str(message.chat.id),
+                message_id=message.message_id,
                 text_original=text,
                 text_translated=translated,
                 media_url=media_url,
@@ -131,7 +131,7 @@ class BotHandlers:
                 await self.session.commit()
             
             # Публикуем в целевой канал
-            await context.bot.send_message(
+            await message.bot.send_message(
                 chat_id=settings.TARGET_CHANNEL_ID,
                 text=f"{translated}\n\n"
                      f"📊 Важность: {news.importance_weight}/5\n"
@@ -140,7 +140,7 @@ class BotHandlers:
             )
             
             if media_url:
-                await context.bot.send_photo(
+                await message.bot.send_photo(
                     chat_id=settings.TARGET_CHANNEL_ID,
                     photo=media_url
                 )
@@ -148,14 +148,14 @@ class BotHandlers:
         except Exception as e:
             logger.error("Error handling message", error=str(e))
 
-def setup_handlers(application, session: AsyncSession):
+def setup_handlers(dp: Router, session: AsyncSession):
     """Настраивает обработчики команд и сообщений"""
     handlers = BotHandlers(session)
     
     # Регистрируем обработчики команд
-    application.add_handler(CommandHandler("start", handlers.start))
-    application.add_handler(CommandHandler("status", handlers.status))
-    application.add_handler(CommandHandler("digest", handlers.digest))
+    dp.message.register(handlers.start, Command(commands=["start"]))
+    dp.message.register(handlers.status, Command(commands=["status"]))
+    dp.message.register(handlers.digest, Command(commands=["digest"]))
     
     # Регистрируем обработчик сообщений
-    application.add_handler(MessageHandler(filters.ALL, handlers.handle_message)) 
+    dp.message.register(handlers.handle_message) 

@@ -1,32 +1,37 @@
-from typing import Optional, List
-from telegram import Update
-from telegram.ext import ContextTypes
+import os
 import aiohttp
 import structlog
+from aiogram.types import Message
 from .config import settings
 
 logger = structlog.get_logger()
 
 class MediaHandler:
     def __init__(self):
-        self.supported_types = ["photo", "document", "video"]
+        self.media_dir = "media"
+        os.makedirs(self.media_dir, exist_ok=True)
     
-    async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
-        """Обрабатывает медиафайлы из сообщения и возвращает URL для сохранения"""
+    async def handle_media(self, message: Message) -> str:
+        """Обрабатывает медиафайлы из сообщения"""
         try:
-            if update.message.photo:
-                # Берем последнее фото (самое большое разрешение)
-                photo = update.message.photo[-1]
-                file = await context.bot.get_file(photo.file_id)
-                return file.file_path
-            
-            elif update.message.document:
-                file = await context.bot.get_file(update.message.document.file_id)
-                return file.file_path
-            
-            elif update.message.video:
-                file = await context.bot.get_file(update.message.video.file_id)
-                return file.file_path
+            if message.photo:
+                # Получаем фото с максимальным разрешением
+                photo = message.photo[-1]
+                file_id = photo.file_id
+                file = await message.bot.get_file(file_id)
+                file_path = file.file_path
+                
+                # Скачиваем файл
+                file_url = f"https://api.telegram.org/file/bot{settings.TELEGRAM_BOT_TOKEN}/{file_path}"
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(file_url) as response:
+                        if response.status == 200:
+                            # Сохраняем файл
+                            file_name = f"{file_id}.jpg"
+                            file_path = os.path.join(self.media_dir, file_name)
+                            with open(file_path, "wb") as f:
+                                f.write(await response.read())
+                            return file_path
             
             return None
             
@@ -54,7 +59,7 @@ class MediaHandler:
         media_urls = []
         for update in updates:
             if update.message.media_group_id:
-                url = await self.handle_media(update, context)
+                url = await self.handle_media(update)
                 if url:
                     media_urls.append(url)
         return media_urls 

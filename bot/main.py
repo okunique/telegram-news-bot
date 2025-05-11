@@ -1,10 +1,10 @@
 import logging
-from telegram.ext import Application
-from telegram import Update
+import asyncio
+from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
 from bot.config import settings
 from bot.database import init_db, async_session
 from bot.handlers import setup_handlers
-import asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,14 +17,18 @@ async def main():
     # Инициализация базы данных
     await init_db()
 
-    # Создание приложения
-    application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    # Создание бота и диспетчера
+    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, parse_mode=ParseMode.HTML)
+    dp = Dispatcher()
 
     # Создание сессии базы данных
     async with async_session() as session:
-        setup_handlers(application, session)
+        # Настройка обработчиков
+        setup_handlers(dp, session)
+        
         logger.info("Бот запущен")
-        await application.run_polling()
+        # Запуск бота
+        await dp.start_polling(bot)
 
 if __name__ == '__main__':
     asyncio.run(main()) 
