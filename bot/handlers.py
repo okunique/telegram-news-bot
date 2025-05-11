@@ -64,9 +64,9 @@ class BotHandlers:
             )
             
             async with self.session.begin():
-                news = await self.session.query(News).filter(
-                    News.timestamp >= time_ago
-                ).all()
+                stmt = select(News).where(News.timestamp >= time_ago)
+                result = await self.session.execute(stmt)
+                news = result.scalars().all()
             
             if not news:
                 await update.message.reply_text(
