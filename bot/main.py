@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from telegram.ext import Application
-from config import Config
+from bot.config import Config
 from database import init_db
 from handlers import setup_handlers
 
