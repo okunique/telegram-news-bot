@@ -5,7 +5,6 @@ from bot.config import settings
 from bot.database import init_db, async_session
 from bot.handlers import setup_handlers
 import asyncio
-import nest_asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -13,9 +12,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-# Разрешаем вложенные event loops
-nest_asyncio.apply()
 
 async def main():
     # Инициализация базы данных
