@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from telegram.ext import Application, Update
+from telegram.ext import Application
 from telegram import Update
 from bot.config import settings
 from bot.database import init_db, async_session
