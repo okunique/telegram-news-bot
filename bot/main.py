@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from telegram.ext import Application
+from telegram.ext import Application, Update
+from telegram import Update
 from bot.config import settings
 from bot.database import init_db, async_session
 from bot.handlers import setup_handlers
@@ -29,7 +30,7 @@ async def main():
             logger.info("Бот запущен")
             await application.initialize()
             await application.start()
-            await application.run_polling(allowed_updates=Application.ALL_TYPES)
+            await application.run_polling(allowed_updates=Update.ALL_TYPES)
         
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}", exc_info=True)
