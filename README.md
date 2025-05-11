@@ -155,3 +155,50 @@ telegram-news-bot/
 ## Лицензия
 
 MIT 
+
+## Мониторинг и логи
+
+Бот настроен на ведение логов в следующих файлах:
+- `/var/log/newsbot.log` - стандартный вывод
+- `/var/log/newsbot.error.log` - ошибки
+
+Для просмотра логов в реальном времени:
+```bash
+# Просмотр всех логов
+tail -f /var/log/newsbot.log
+
+# Просмотр только ошибок
+tail -f /var/log/newsbot.error.log
+
+# Просмотр логов через journalctl
+journalctl -u newsbot -f
+```
+
+## Отладка проблем
+
+Если бот не запускается:
+
+1. Проверьте статус сервиса:
+```bash
+sudo systemctl status newsbot
+```
+
+2. Проверьте логи на наличие ошибок:
+```bash
+sudo journalctl -u newsbot -n 50 --no-pager
+```
+
+3. Убедитесь, что все переменные окружения установлены правильно:
+```bash
+cat .env
+```
+
+4. Проверьте права доступа:
+```bash
+ls -la /var/log/newsbot*
+```
+
+5. Перезапустите сервис:
+```bash
+sudo systemctl restart newsbot
+``` 

@@ -1,59 +1,46 @@
 import asyncio
 import logging
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-import structlog
-from .config import settings
-from .handlers import BotHandlers
-from .models import Base
+from telegram.ext import Application
+from config import Config
+from database import init_db
+from handlers import setup_handlers
 
 # Настройка логирования
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer()
-    ]
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
-logger = structlog.get_logger()
-
-# Создание движка базы данных
-DATABASE_URL = (
-    f"postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"
-    f"@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
-)
-engine = create_async_engine(DATABASE_URL, echo=True)
-async_session = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
-
-async def init_db():
-    """Инициализация базы данных"""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+logger = logging.getLogger(__name__)
 
 async def main():
-    """Основная функция запуска бота"""
-    # Инициализация базы данных
-    await init_db()
-    
-    # Создание сессии базы данных
-    async with async_session() as session:
-        # Создание обработчиков
-        handlers = BotHandlers(session)
+    try:
+        # Инициализация базы данных
+        await init_db()
         
         # Создание приложения
-        application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+        application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
         
-        # Регистрация обработчиков
-        application.add_handler(CommandHandler("start", handlers.start))
-        application.add_handler(CommandHandler("status", handlers.status))
-        application.add_handler(CommandHandler("digest", handlers.digest))
-        application.add_handler(MessageHandler(filters.ALL, handlers.handle_message))
+        # Настройка обработчиков
+        setup_handlers(application)
         
         # Запуск бота
-        logger.info("Starting bot...")
-        await application.run_polling()
+        logger.info("Бот запущен")
+        await application.initialize()
+        await application.start()
+        await application.run_polling(allowed_updates=Application.ALL_TYPES)
+        
+    except Exception as e:
+        logger.error(f"Ошибка при запуске бота: {e}", exc_info=True)
+        raise
+    finally:
+        if 'application' in locals():
+            await application.stop()
+            await application.shutdown()
 
-if __name__ == "__main__":
-    asyncio.run(main()) 
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Бот остановлен пользователем")
+    except Exception as e:
+        logger.error(f"Критическая ошибка: {e}", exc_info=True) 

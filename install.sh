@@ -103,12 +103,21 @@ After=network.target postgresql.service
 User=$SUDO_USER
 WorkingDirectory=$(pwd)
 Environment="PATH=$(pwd)/venv/bin"
+Environment="PYTHONUNBUFFERED=1"
 ExecStart=$(pwd)/venv/bin/python -m bot.main
 Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/newsbot.log
+StandardError=append:/var/log/newsbot.error.log
 
 [Install]
 WantedBy=multi-user.target
 EOL
+
+# Создание лог-файлов
+touch /var/log/newsbot.log /var/log/newsbot.error.log
+chown $SUDO_USER:$SUDO_USER /var/log/newsbot.log /var/log/newsbot.error.log
+chmod 644 /var/log/newsbot.log /var/log/newsbot.error.log
 
 # Перезагрузка systemd и запуск сервиса
 print_message "Запуск сервиса..."
