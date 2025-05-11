@@ -13,47 +13,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def main():
-    try:
-        # Инициализация базы данных
-        await init_db()
-        
-        # Создание приложения
-        application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
-        
-        # Создание сессии базы данных
+def main():
+    # Инициализация базы данных
+    asyncio.run(init_db())
+
+    # Создание приложения
+    application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+
+    # Создание сессии базы данных
+    # Для простоты: создаём новую сессию на каждый апдейт через partial
+    from functools import partial
+    from sqlalchemy.ext.asyncio import AsyncSession
+    async def session_factory():
         async with async_session() as session:
-            # Настройка обработчиков
-            setup_handlers(application, session)
-            
-            # Запуск бота
-            logger.info("Бот запущен")
-            await application.initialize()
-            await application.start()
-            await application.run_polling()
-        
-    except Exception as e:
-        logger.error(f"Ошибка при запуске бота: {e}", exc_info=True)
-        raise
-    finally:
-        if 'application' in locals():
-            await application.stop()
-            await application.shutdown()
+            yield session
+    setup_handlers(application, partial(session_factory))
+
+    logger.info("Бот запущен")
+    application.run_polling()
 
 if __name__ == '__main__':
-    import sys
-    import asyncio
-    if sys.platform.startswith('win'):
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Если event loop уже запущен (например, внутри Jupyter)
-            task = loop.create_task(main())
-            loop.run_until_complete(task)
-        else:
-            loop.run_until_complete(main())
-    except KeyboardInterrupt:
-        logger.info("Бот остановлен пользователем")
-    except Exception as e:
-        logger.error(f"Критическая ошибка: {e}", exc_info=True) 
+    main() 
