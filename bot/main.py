@@ -41,8 +41,18 @@ async def main():
             await application.shutdown()
 
 if __name__ == '__main__':
+    import sys
+    import asyncio
+    if sys.platform.startswith('win'):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     try:
-        asyncio.run(main())
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Если event loop уже запущен (например, внутри Jupyter)
+            task = loop.create_task(main())
+            loop.run_until_complete(task)
+        else:
+            loop.run_until_complete(main())
     except KeyboardInterrupt:
         logger.info("Бот остановлен пользователем")
     except Exception as e:
