@@ -1,161 +1,231 @@
+import logging
+import structlog
+from datetime import datetime, timedelta
+from typing import Optional
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import Command
-import structlog
-from typing import Optional
-from .config import settings
-from .openrouter_client import OpenRouterClient
-from .media_handler import MediaHandler
-from .models import News, DigestLog
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from datetime import datetime, timedelta
+from .database import async_session
+from .models import News, DigestLog
+from .media_handler import MediaHandler
+from .openrouter_client import OpenRouterClient
 
 logger = structlog.get_logger()
 
-class BotHandlers:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-        self.openrouter = OpenRouterClient()
+class NewsHandler:
+    def __init__(self, bot):
+        self.bot = bot
+        self.router = Router()
         self.media_handler = MediaHandler()
+        self.openrouter = OpenRouterClient()
+        self.setup_handlers()
     
-    async def start(self, message: Message):
-        """Обработчик команды /start"""
-        await message.answer(
-            "Привет! Я бот для анализа и перевода новостей. "
-            "Я буду собирать новости из указанных каналов, "
-            "переводить их и создавать аналитические дайджесты."
-        )
-    
-    async def status(self, message: Message):
-        """Обработчик команды /status"""
-        try:
-            # Проверяем соединение с базой данных
-            async with self.session.begin():
-                news_count = await self.session.scalar(select(func.count()).select_from(News))
-                digest_count = await self.session.scalar(select(func.count()).select_from(DigestLog))
-            
-            status_text = (
-                "📊 Статус бота:\n\n"
-                f"✅ Соединение с базой данных: активно\n"
-                f"✅ OpenRouter API: проверено\n"
-                f"📝 Обработано новостей: {news_count}\n"
-                f"📊 Создано дайджестов: {digest_count}\n"
-            )
-            
-            await message.answer(status_text)
-            
-        except Exception as e:
-            logger.error("Error in status command", error=str(e))
-            await message.answer("❌ Ошибка при получении статуса")
-    
-    async def digest(self, message: Message):
-        """Обработчик команды /digest"""
-        try:
-            args = message.text.split()[1:] if message.text else []
-            period = args[0] if args else "24h"
-            
-            if period not in settings.DIGEST_PERIODS:
-                await message.answer(
-                    "❌ Неверный период. Используйте: 1h или 24h"
-                )
-                return
-            
-            # Получаем новости за указанный период
-            time_ago = datetime.utcnow() - timedelta(
-                hours=1 if period == "1h" else 24
-            )
-            
-            async with self.session.begin():
-                stmt = select(News).where(News.timestamp >= time_ago)
-                result = await self.session.execute(stmt)
-                news = result.scalars().all()
-            
-            if not news:
-                await message.answer(
-                    f"📭 Нет новостей за последние {period}"
-                )
-                return
-            
-            # Генерируем дайджест
-            digest_text = await self._generate_digest(news, period)
-            await message.answer(digest_text)
-            
-        except Exception as e:
-            logger.error("Error in digest command", error=str(e))
-            await message.answer("❌ Ошибка при создании дайджеста")
-    
-    async def _generate_digest(self, news: list, period: str) -> str:
-        """Генерирует текст дайджеста"""
-        # TODO: Реализовать генерацию дайджеста с помощью OpenRouter API
-        return "Заглушка для дайджеста"
+    def setup_handlers(self):
+        self.router.message.register(self.handle_message, F.text)
+        self.router.message.register(self.handle_media, F.photo)
+        self.router.message.register(self.handle_media_group, F.media_group_id)
+        self.router.message.register(self.digest, Command("digest"))
+        self.router.message.register(self.status, Command("status"))
     
     async def handle_message(self, message: Message):
-        """Обработчик входящих сообщений"""
+        """Обрабатывает текстовые сообщения"""
         try:
-            # Проверяем, что сообщение из нужного канала
-            if str(message.chat.id) not in settings.SOURCE_CHANNEL_IDS:
-                return
-            
-            # Получаем текст и медиа
-            text = message.text or message.caption or ""
-            media_url = await self.media_handler.handle_media(message)
-            
-            if not text and not media_url:
-                return
-            
-            # Анализируем текст
-            analysis = await self.openrouter.analyze_text(text)
-            if not analysis:
-                logger.error("Failed to analyze text")
-                return
-            
-            # Переводим текст
-            translated = await self.openrouter.translate_text(text)
-            if not translated:
-                logger.error("Failed to translate text")
-                return
-            
-            # Сохраняем в базу данных
-            news = News(
-                source_channel_id=str(message.chat.id),
-                message_id=message.message_id,
-                text_original=text,
-                text_translated=translated,
-                media_url=media_url,
-                **analysis
-            )
-            
-            async with self.session.begin():
-                self.session.add(news)
-                await self.session.commit()
-            
-            # Публикуем в целевой канал
-            await message.bot.send_message(
-                chat_id=settings.TARGET_CHANNEL_ID,
-                text=f"{translated}\n\n"
-                     f"📊 Важность: {news.importance_weight}/5\n"
-                     f"🎯 Направление: {news.market_target.value}\n"
-                     f"🏷 Тема: {news.topic}"
-            )
-            
-            if media_url:
-                await message.bot.send_photo(
-                    chat_id=settings.TARGET_CHANNEL_ID,
-                    photo=media_url
+            async with async_session() as session:
+                # Сохраняем новость
+                news = News(
+                    source_channel_id=message.chat.id,
+                    message_id=message.message_id,
+                    text=message.text,
+                    timestamp=datetime.utcnow()
                 )
-            
+                session.add(news)
+                await session.commit()
+                
+                # Анализируем текст
+                analysis = await self.openrouter.analyze_text(message.text)
+                if analysis:
+                    news.topic = analysis.get("topic")
+                    news.confidence_level = analysis.get("confidence_level")
+                    await session.commit()
+                    
+                    # Отправляем результат анализа
+                    await message.reply(
+                        f"📊 Анализ новости:\n"
+                        f"Тема: {news.topic}\n"
+                        f"Уверенность: {news.confidence_level}%"
+                    )
+                
         except Exception as e:
             logger.error("Error handling message", error=str(e))
-
-def setup_handlers(dp: Router, session: AsyncSession):
-    """Настраивает обработчики команд и сообщений"""
-    handlers = BotHandlers(session)
+            await message.reply("❌ Произошла ошибка при обработке сообщения")
     
-    # Регистрируем обработчики команд
-    dp.message.register(handlers.start, Command(commands=["start"]))
-    dp.message.register(handlers.status, Command(commands=["status"]))
-    dp.message.register(handlers.digest, Command(commands=["digest"]))
+    async def handle_media(self, message: Message):
+        """Обрабатывает медиафайлы"""
+        try:
+            # Сохраняем медиафайл
+            media_path = await self.media_handler.handle_media(message)
+            if not media_path:
+                return
+            
+            async with async_session() as session:
+                # Сохраняем новость
+                news = News(
+                    source_channel_id=message.chat.id,
+                    message_id=message.message_id,
+                    text=message.caption or "",
+                    media_path=media_path,
+                    timestamp=datetime.utcnow()
+                )
+                session.add(news)
+                await session.commit()
+                
+                # Анализируем текст
+                if message.caption:
+                    analysis = await self.openrouter.analyze_text(message.caption)
+                    if analysis:
+                        news.topic = analysis.get("topic")
+                        news.confidence_level = analysis.get("confidence_level")
+                        await session.commit()
+                        
+                        # Отправляем результат анализа
+                        await message.reply(
+                            f"📊 Анализ новости:\n"
+                            f"Тема: {news.topic}\n"
+                            f"Уверенность: {news.confidence_level}%"
+                        )
+                
+        except Exception as e:
+            logger.error("Error handling media", error=str(e))
+            await message.reply("❌ Произошла ошибка при обработке медиафайла")
     
-    # Регистрируем обработчик сообщений
-    dp.message.register(handlers.handle_message) 
+    async def handle_media_group(self, message: Message):
+        """Обрабатывает группу медиафайлов"""
+        try:
+            # Получаем все сообщения из группы
+            media_group = await self.bot.get_media_group(
+                message.chat.id,
+                message.message_id
+            )
+            
+            # Сохраняем медиафайлы
+            media_paths = await self.media_handler.handle_media_group(media_group)
+            if not media_paths:
+                return
+            
+            async with async_session() as session:
+                # Сохраняем новость
+                news = News(
+                    source_channel_id=message.chat.id,
+                    message_id=message.message_id,
+                    text=message.caption or "",
+                    media_path=",".join(media_paths),
+                    timestamp=datetime.utcnow()
+                )
+                session.add(news)
+                await session.commit()
+                
+                # Анализируем текст
+                if message.caption:
+                    analysis = await self.openrouter.analyze_text(message.caption)
+                    if analysis:
+                        news.topic = analysis.get("topic")
+                        news.confidence_level = analysis.get("confidence_level")
+                        await session.commit()
+                        
+                        # Отправляем результат анализа
+                        await message.reply(
+                            f"📊 Анализ новости:\n"
+                            f"Тема: {news.topic}\n"
+                            f"Уверенность: {news.confidence_level}%"
+                        )
+                
+        except Exception as e:
+            logger.error("Error handling media group", error=str(e))
+            await message.reply("❌ Произошла ошибка при обработке группы медиафайлов")
+    
+    async def digest(self, message: Message):
+        """Генерирует дайджест новостей"""
+        try:
+            # Получаем период из команды
+            period = message.text.split()[1] if len(message.text.split()) > 1 else "day"
+            if period not in ["hour", "day", "week"]:
+                await message.reply("❌ Неверный период. Используйте: hour, day, week")
+                return
+            
+            # Вычисляем время начала периода
+            now = datetime.utcnow()
+            if period == "hour":
+                time_ago = now - timedelta(hours=1)
+            elif period == "day":
+                time_ago = now - timedelta(days=1)
+            else:  # week
+                time_ago = now - timedelta(weeks=1)
+            
+            async with async_session() as session:
+                # Получаем новости за период
+                stmt = select(News).where(News.timestamp >= time_ago)
+                result = await session.execute(stmt)
+                news_list = result.scalars().all()
+                
+                if not news_list:
+                    await message.reply("📭 Нет новостей за указанный период")
+                    return
+                
+                # Группируем новости по темам
+                topics = {}
+                for news in news_list:
+                    if news.topic:
+                        if news.topic not in topics:
+                            topics[news.topic] = []
+                        topics[news.topic].append(news)
+                
+                # Формируем дайджест
+                digest_text = f"📰 Дайджест новостей за {period}:\n\n"
+                for topic, news in topics.items():
+                    digest_text += f"📌 {topic}:\n"
+                    for n in news:
+                        digest_text += f"- {n.text[:100]}...\n"
+                    digest_text += "\n"
+                
+                # Сохраняем лог дайджеста
+                log = DigestLog(
+                    period=period,
+                    news_count=len(news_list),
+                    topics_count=len(topics),
+                    generated_at=now
+                )
+                session.add(log)
+                await session.commit()
+                
+                # Отправляем дайджест
+                await message.reply(digest_text)
+                
+        except Exception as e:
+            logger.error("Error generating digest", error=str(e))
+            await message.reply("❌ Произошла ошибка при генерации дайджеста")
+    
+    async def status(self, message: Message):
+        """Показывает статус бота"""
+        try:
+            async with async_session() as session:
+                # Получаем статистику
+                total_news = await session.execute(select(func.count(News.id)))
+                total_news = total_news.scalar()
+                
+                total_digests = await session.execute(select(func.count(DigestLog.id)))
+                total_digests = total_digests.scalar()
+                
+                # Формируем сообщение
+                status_text = (
+                    "🤖 Статус бота:\n\n"
+                    f"📊 Всего новостей: {total_news}\n"
+                    f"📈 Сгенерировано дайджестов: {total_digests}\n"
+                    f"⏰ Время сервера: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+                )
+                
+                await message.reply(status_text)
+                
+        except Exception as e:
+            logger.error("Error getting status", error=str(e))
+            await message.reply("❌ Произошла ошибка при получении статуса") 

@@ -1,34 +1,33 @@
-import logging
 import asyncio
+import logging
+import structlog
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.enums import ParseMode
-from bot.config import settings
-from bot.database import init_db, async_session
-from bot.handlers import setup_handlers
+from .config import settings
+from .handlers import NewsHandler
+from .database import init_db
 
 # Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = structlog.get_logger()
 
 async def main():
     # Инициализация базы данных
     await init_db()
-
-    # Создание бота и диспетчера
+    
+    # Инициализация бота
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, parse_mode=ParseMode.HTML)
-    dp = Dispatcher()
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
+    
+    # Регистрация хендлеров
+    news_handler = NewsHandler(bot)
+    dp.include_router(news_handler.router)
+    
+    # Запуск бота
+    logger.info("Starting bot...")
+    await dp.start_polling(bot)
 
-    # Создание сессии базы данных
-    async with async_session() as session:
-        # Настройка обработчиков
-        setup_handlers(dp, session)
-        
-        logger.info("Бот запущен")
-        # Запуск бота
-        await dp.start_polling(bot)
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main()) 
