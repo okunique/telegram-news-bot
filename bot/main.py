@@ -30,7 +30,7 @@ async def main():
             logger.info("Бот запущен")
             await application.initialize()
             await application.start()
-            await application.run_polling(allowed_updates=Update.ALL_TYPES)
+            await application.run_polling()
         
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}", exc_info=True)

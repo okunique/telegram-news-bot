@@ -1,10 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from .base import Base
 from .config import settings
-
-# Создаем базовый класс для моделей
-Base = declarative_base()
 
 # Создаем асинхронный движок SQLAlchemy
 engine = create_async_engine(

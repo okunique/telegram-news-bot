@@ -3,10 +3,8 @@ from enum import Enum
 from typing import Optional
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum as SQLEnum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
+from .base import Base
 import uuid
-
-Base = declarative_base()
 
 class MarketTarget(str, Enum):
     TRADFI = "TradFi"
