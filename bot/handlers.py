@@ -6,6 +6,7 @@ from aiogram.filters import Command
 from sqlalchemy import select, func
 from .database import async_session
 from .models import News, DigestLog
+from .openrouter_client import analyze_news
 
 logger = logging.getLogger(__name__)
 
@@ -131,44 +132,44 @@ async def cmd_digest(message: Message):
         await message.answer("❌ Произошла ошибка при генерации дайджеста")
 
 async def handle_message(message: Message):
-    """Обработчик текстовых сообщений"""
+    """Обработчик текстовых сообщений с анализом"""
     try:
+        # Анализируем новость
+        topic, confidence = await analyze_news(message.text)
         async with async_session() as session:
-            # Сохраняем новость
             news = News(
                 source_channel_id=message.chat.id,
                 message_id=message.message_id,
                 text=message.text,
+                topic=topic,
+                confidence=confidence,
                 timestamp=datetime.utcnow()
             )
             session.add(news)
             await session.commit()
-            
-            # Отправляем подтверждение
-            await message.reply("✅ Новость сохранена")
-            
+        await message.reply(f"✅ Новость сохранена\nТема: {topic}\nУверенность: {confidence}")
     except Exception as e:
         logger.error(f"Ошибка при обработке сообщения: {e}")
         await message.reply("❌ Произошла ошибка при обработке сообщения")
 
 async def handle_photo(message: Message):
-    """Обработчик фотографий"""
+    """Обработчик фотографий с анализом caption"""
     try:
+        caption = message.caption or ""
+        topic, confidence = await analyze_news(caption) if caption else (None, None)
         async with async_session() as session:
-            # Сохраняем новость
             news = News(
                 source_channel_id=message.chat.id,
                 message_id=message.message_id,
-                text=message.caption or "",
+                text=caption,
+                topic=topic,
+                confidence=confidence,
                 media_path=message.photo[-1].file_id,  # Используем file_id как путь
                 timestamp=datetime.utcnow()
             )
             session.add(news)
             await session.commit()
-            
-            # Отправляем подтверждение
-            await message.reply("✅ Фото сохранено")
-            
+        await message.reply(f"✅ Фото сохранено\nТема: {topic}\nУверенность: {confidence}")
     except Exception as e:
         logger.error(f"Ошибка при обработке фото: {e}")
         await message.reply("❌ Произошла ошибка при обработке фото") 
