@@ -15,11 +15,7 @@ class Settings(BaseSettings):
     TELEGRAM_API_HASH: str
     
     # Каналы
-    SOURCE_CHANNEL_IDS: List[str] = [
-        "channel1",  # Замени на реальные ID каналов
-        "channel2"
-    ]
-    TARGET_CHANNEL_ID: str = "your_channel"  # Замени на реальный ID канала
+    SOURCE_CHANNEL_IDS: str  # Изменено с List[str] на str
     
     # База данных
     DATABASE_URL: str
@@ -56,7 +52,7 @@ class Settings(BaseSettings):
     @property
     def source_channels(self) -> List[str]:
         """Получить список ID каналов-источников"""
-        return [ch.strip() for ch in self.SOURCE_CHANNEL_IDS]
+        return [ch.strip() for ch in self.SOURCE_CHANNEL_IDS.split(',')]
     
     @property
     def api_id(self) -> int:
