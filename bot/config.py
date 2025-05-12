@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Настройки приложения"""
     # Telegram
     TELEGRAM_BOT_TOKEN: str
-    SOURCE_CHANNEL_IDS: List[str]
+    SOURCE_CHANNEL_IDS: str  # Будет преобразовано в список
     
     # База данных
     DATABASE_URL: str
@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     
     # Настройки приложения
     DEBUG: bool = False
+    
+    @property
+    def source_channels(self) -> List[str]:
+        """Получить список ID каналов-источников"""
+        return [ch.strip() for ch in self.SOURCE_CHANNEL_IDS.split(",")]
     
     class Config:
         env_file = ".env"

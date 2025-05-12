@@ -13,7 +13,7 @@ router = Router()
 @router.message(F.text)
 async def handle_text(message: Message):
     """Обработка текстовых сообщений"""
-    if str(message.chat.id) not in settings.SOURCE_CHANNEL_IDS:
+    if str(message.chat.id) not in settings.source_channels:
         return
     
     # Сохраняем новость
@@ -36,7 +36,7 @@ async def handle_text(message: Message):
 @router.message(F.photo)
 async def handle_photo(message: Message):
     """Обработка фотографий"""
-    if str(message.chat.id) not in settings.SOURCE_CHANNEL_IDS:
+    if str(message.chat.id) not in settings.source_channels:
         return
     
     # Получаем файл фото
