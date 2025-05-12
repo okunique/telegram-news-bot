@@ -7,8 +7,14 @@ load_dotenv()
 
 class Settings(BaseSettings):
     """Настройки приложения"""
-    # Telegram
+    # Telegram Bot
     TELEGRAM_BOT_TOKEN: str
+    
+    # Telegram User API
+    TELEGRAM_API_ID: str
+    TELEGRAM_API_HASH: str
+    
+    # Каналы
     SOURCE_CHANNEL_IDS: List[str] = [
         "channel1",  # Замени на реальные ID каналов
         "channel2"
@@ -51,6 +57,11 @@ class Settings(BaseSettings):
     def source_channels(self) -> List[str]:
         """Получить список ID каналов-источников"""
         return [ch.strip() for ch in self.SOURCE_CHANNEL_IDS]
+    
+    @property
+    def api_id(self) -> int:
+        """Получить API ID как целое число"""
+        return int(self.TELEGRAM_API_ID)
     
     class Config:
         env_file = ".env"
