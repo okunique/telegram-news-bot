@@ -4,6 +4,8 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.client.default import DefaultBotProperties
+
 from .config import settings
 from .database import init_db
 from .handlers import register_handlers
@@ -24,7 +26,10 @@ async def main():
         logger.info("База данных инициализирована")
         
         # Инициализация бота и диспетчера
-        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, parse_mode=ParseMode.HTML)
+        bot = Bot(
+            token=settings.TELEGRAM_BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
         dp = Dispatcher(storage=MemoryStorage())
         
         # Регистрация обработчиков
@@ -42,7 +47,10 @@ async def main():
 if __name__ == "__main__":
     try:
         dp = Dispatcher(storage=MemoryStorage())
-        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, parse_mode=ParseMode.HTML)
+        bot = Bot(
+            token=settings.TELEGRAM_BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
         register_handlers(dp)
         dp.run_polling(bot)
     except KeyboardInterrupt:
