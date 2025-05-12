@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 from .config import settings
-from .models import Base
+from .base import Base
 
 logger = logging.getLogger(__name__)
 
