@@ -1,6 +1,7 @@
 import aiohttp
 import logging
-from typing import Tuple, Optional
+import json
+from typing import Tuple, Optional, Dict
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -164,3 +165,115 @@ class OpenRouterClient:
             except Exception as e:
                 logger.error("OpenRouter API translation request failed", error=str(e))
                 return None 
+
+async def analyze_news_full(text: str) -> Dict:
+    """
+    Расширенный анализ новости
+    
+    Returns:
+        Dict с полями:
+        - topic: тема новости
+        - confidence: уверенность (0-1)
+        - importance: важность (1-5)
+        - is_catalyst: является ли катализатором
+        - market_target: TradFi/Crypto/Both
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            prompt = f"""
+            Проанализируй следующую новость и определи:
+            1. Тематику (из списка: {', '.join(settings.TRADFI_TOPICS + settings.CRYPTO_TOPICS)})
+            2. Уровень уверенности в определении темы (от 0 до 1)
+            3. Важность новости (от 1 до 5, где 5 - максимально важная)
+            4. Является ли новость катализатором рынка (True/False)
+            5. Целевая рыночная область (TradFi/Crypto/Both)
+            
+            Текст новости:
+            {text}
+            
+            Ответ должен быть в формате JSON:
+            {{
+                "topic": "тема",
+                "confidence": 0.95,
+                "importance": 4,
+                "is_catalyst": true,
+                "market_target": "TradFi"
+            }}
+            """
+            
+            data = {
+                "model": settings.OPENROUTER_MODEL,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+            
+            async with session.post(
+                f"{settings.OPENROUTER_API_URL}/chat/completions",
+                headers=headers,
+                json=data
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"Ошибка API OpenRouter: {response.status}")
+                    return None
+                
+                result = await response.json()
+                content = result["choices"][0]["message"]["content"]
+                
+                try:
+                    analysis = json.loads(content)
+                    return analysis
+                except json.JSONDecodeError:
+                    logger.error("Ошибка парсинга JSON ответа")
+                    return None
+                
+    except Exception as e:
+        logger.error(f"Ошибка при анализе новости: {e}")
+        return None
+
+async def translate_news(text: str, style: str = "business") -> Optional[str]:
+    """
+    Переводит новость на русский язык с учетом стиля
+    
+    Args:
+        text: Текст для перевода
+        style: Стиль перевода (business, technical, journalistic)
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            prompt = f"""
+            Переведи следующий текст на русский язык, используя {style} стиль.
+            Сохрани все термины и специфические выражения.
+            
+            Текст:
+            {text}
+            """
+            
+            data = {
+                "model": settings.OPENROUTER_MODEL,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+            
+            async with session.post(
+                f"{settings.OPENROUTER_API_URL}/chat/completions",
+                headers=headers,
+                json=data
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"Ошибка API OpenRouter при переводе: {response.status}")
+                    return None
+                
+                result = await response.json()
+                return result["choices"][0]["message"]["content"]
+                
+    except Exception as e:
+        logger.error(f"Ошибка при переводе новости: {e}")
+        return None 

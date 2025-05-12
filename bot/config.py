@@ -9,23 +9,39 @@ class Settings(BaseSettings):
     """Настройки приложения"""
     # Telegram
     TELEGRAM_BOT_TOKEN: str
-    SOURCE_CHANNEL_IDS: str  # Будет преобразовано в список
+    SOURCE_CHANNEL_IDS: List[str] = [
+        "channel1",  # Замени на реальные ID каналов
+        "channel2"
+    ]
+    TARGET_CHANNEL_ID: str = "your_channel"  # Замени на реальный ID канала
     
     # База данных
     DATABASE_URL: str
     
     # Топики для анализа
     TRADFI_TOPICS: List[str] = [
-        "экономика", "ФРС", "инфляция", "ставки", "рынок", 
-        "акции", "облигации", "недвижимость", "трейдинг"
+        "экономика",
+        "геополитика",
+        "энергетика",
+        "политика",
+        "финансы",
+        "акции",
+        "облигации",
+        "форекс"
     ]
     CRYPTO_TOPICS: List[str] = [
-        "биткоин", "альткоины", "DeFi", "NFT", "блокчейн",
-        "майнинг", "токены", "смарт-контракты"
+        "криптовалюты",
+        "DeFi",
+        "Web3",
+        "NFT",
+        "блокчейн",
+        "токены",
+        "смарт-контракты"
     ]
     
     # OpenRouter
     OPENROUTER_API_KEY: str
+    OPENROUTER_API_URL: str = "https://openrouter.ai/api/v1"
     OPENROUTER_MODEL: str = "anthropic/claude-3-opus-20240229"
     
     # Настройки приложения
@@ -34,7 +50,7 @@ class Settings(BaseSettings):
     @property
     def source_channels(self) -> List[str]:
         """Получить список ID каналов-источников"""
-        return [ch.strip() for ch in self.SOURCE_CHANNEL_IDS.split(",")]
+        return [ch.strip() for ch in self.SOURCE_CHANNEL_IDS]
     
     class Config:
         env_file = ".env"
