@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     TELEGRAM_API_HASH: str
     
     # Каналы
-    SOURCE_CHANNEL_IDS: str  # Изменено с List[str] на str
+    SOURCE_CHANNEL_IDS: str
+    TARGET_CHANNEL_ID: str = "-1001556054753"  # ID канала для публикации новостей
     
     # База данных
     DATABASE_URL: str
