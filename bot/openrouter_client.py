@@ -1,9 +1,78 @@
 import aiohttp
-from typing import Dict, Any, Optional
+import logging
+from typing import Tuple, Optional
 from .config import settings
-import structlog
 
-logger = structlog.get_logger()
+logger = logging.getLogger(__name__)
+
+async def analyze_news(text: str) -> Tuple[Optional[str], Optional[float]]:
+    """
+    Анализирует текст новости и определяет её тему
+    
+    Args:
+        text: Текст новости для анализа
+        
+    Returns:
+        Tuple[Optional[str], Optional[float]]: Тема новости и уровень уверенности
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            # Формируем промпт для анализа
+            prompt = f"""
+            Проанализируй следующий текст новости и определи:
+            1. Тематику (из списка: {', '.join(settings.TRADFI_TOPICS + settings.CRYPTO_TOPICS)})
+            2. Уровень уверенности в определении темы (от 0 до 1)
+            
+            Текст новости:
+            {text}
+            
+            Ответ должен быть в формате:
+            Тема: [тема]
+            Уверенность: [число от 0 до 1]
+            """
+            
+            data = {
+                "model": settings.OPENROUTER_MODEL,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
+            }
+            
+            async with session.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=data
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"Ошибка API OpenRouter: {response.status}")
+                    return None, None
+                
+                result = await response.json()
+                content = result["choices"][0]["message"]["content"]
+                
+                # Парсим ответ
+                topic = None
+                confidence = None
+                
+                for line in content.split("\n"):
+                    if line.startswith("Тема:"):
+                        topic = line.replace("Тема:", "").strip()
+                    elif line.startswith("Уверенность:"):
+                        try:
+                            confidence = float(line.replace("Уверенность:", "").strip())
+                        except ValueError:
+                            confidence = None
+                
+                return topic, confidence
+                
+    except Exception as e:
+        logger.error(f"Ошибка при анализе новости: {e}")
+        return None, None
 
 class OpenRouterClient:
     def __init__(self):
@@ -14,18 +83,19 @@ class OpenRouterClient:
             "Content-Type": "application/json"
         }
     
-    async def analyze_text(self, text: str) -> Dict[str, Any]:
+    async def analyze_text(self, text: str) -> Tuple[Optional[str], Optional[float]]:
         """Анализирует текст и возвращает тематику, важность и другие параметры"""
         prompt = f"""
         Проанализируй следующий текст новости и определи:
         1. Тематику (из списка: {', '.join(settings.TRADFI_TOPICS + settings.CRYPTO_TOPICS)})
-        2. Целевую рыночную область (TradFi, Crypto или Both)
-        3. Важность (от 1 до 5)
-        4. Является ли катализатором (True/False)
+        2. Уровень уверенности в определении темы (от 0 до 1)
         
-        Текст: {text}
+        Текст новости:
+        {text}
         
-        Ответ дай в формате JSON.
+        Ответ должен быть в формате:
+        Тема: [тема]
+        Уверенность: [число от 0 до 1]
         """
         
         async with aiohttp.ClientSession() as session:
@@ -40,15 +110,30 @@ class OpenRouterClient:
                 ) as response:
                     if response.status == 200:
                         result = await response.json()
-                        return result["choices"][0]["message"]["content"]
+                        content = result["choices"][0]["message"]["content"]
+                        
+                        # Парсим ответ
+                        topic = None
+                        confidence = None
+                        
+                        for line in content.split("\n"):
+                            if line.startswith("Тема:"):
+                                topic = line.replace("Тема:", "").strip()
+                            elif line.startswith("Уверенность:"):
+                                try:
+                                    confidence = float(line.replace("Уверенность:", "").strip())
+                                except ValueError:
+                                    confidence = None
+                        
+                        return topic, confidence
                     else:
                         logger.error("OpenRouter API error", 
                                    status=response.status,
                                    text=await response.text())
-                        return None
+                        return None, None
             except Exception as e:
                 logger.error("OpenRouter API request failed", error=str(e))
-                return None
+                return None, None
     
     async def translate_text(self, text: str, style: str = "business") -> Optional[str]:
         """Переводит текст на русский язык с учетом стиля"""
