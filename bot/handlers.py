@@ -10,7 +10,7 @@ from .openrouter_client import analyze_news
 
 logger = logging.getLogger(__name__)
 
-def setup_handlers(dp: Router):
+def register_handlers(dp: Router):
     """Настройка обработчиков команд"""
     dp.message.register(cmd_start, Command(commands=["start"]))
     dp.message.register(cmd_help, Command(commands=["help"]))

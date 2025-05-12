@@ -46,13 +46,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        dp = Dispatcher(storage=MemoryStorage())
-        bot = Bot(
-            token=settings.TELEGRAM_BOT_TOKEN,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-        )
-        register_handlers(dp)
-        dp.run_polling(bot)
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Бот остановлен")
     except Exception as e:
